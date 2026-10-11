@@ -1,0 +1,11 @@
+services:
+  # The web API application service
+  api:
+    # Build image using the Dockerfile in the current directory
+    build: .
+    # Map host port 3000 to container port 3000
+    ports:
+      - "3000:3000"
+    # Provide default environment variables
+    environment:
+      - PORT=3000
