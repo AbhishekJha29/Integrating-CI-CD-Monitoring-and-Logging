@@ -1,4 +1,4 @@
-# DevOps Demo App - Phase 0
+# DevOps Demo App
 
 A minimal, production-like Node.js + Express microservice designed as the foundation for a DevOps learning journey.
 
@@ -19,7 +19,12 @@ Every incoming request also emits a single structured JSON log line to `stdout` 
    npm install
    ```
 
-2. Start the server:
+2. Run automated tests:
+   ```bash
+   npm test
+   ```
+
+3. Start the server:
    ```bash
    npm start
    ```
@@ -46,9 +51,26 @@ curl http://localhost:3000/health
 curl http://localhost:3000/metrics
 ```
 
+## Continuous Integration (CI)
+
+This project uses GitHub Actions (`.github/workflows/ci.yml`) for automated testing, image building, security scanning, and container publishing.
+
+- **On Pull Requests (any branch):**
+  1. Runs automated tests via `npm test` using Node.js 20.
+  2. Builds the Docker image locally.
+  3. Scans the container image with Aqua Security Trivy for fixable `CRITICAL` vulnerabilities.
+  4. The image is **not** pushed to any registry.
+
+- **On Push / Merge to `main`:**
+  1. Executes the exact same test, build, and Trivy security scanning steps.
+  2. Authenticates with GitHub Container Registry (`ghcr.io`).
+  3. Pushes the validated Docker image tagged with both the commit SHA (`:<sha>`) and `:latest`.
+
+- **Finding Pushed Images:**
+  Published images are available on GitHub under your repository's **Packages** page (`ghcr.io/<owner>/<repo>:<tag>`).
+
 ## Upcoming Phases
 
-- **Phase 1: Continuous Integration (CI)** - Automated linting, testing, and Docker image validation on pull requests.
-- **Phase 2: Continuous Deployment (CD)** - Automated deployment pipeline to container registry and target environment.
+- **Phase 2: Continuous Deployment (CD)** - Automated deployment pipeline to target container environment.
 - **Phase 3: Monitoring** - Prometheus metrics scraping and Grafana dashboards for observability.
 - **Phase 4: Logging** - Centralized log aggregation and querying from stdout JSON streams.

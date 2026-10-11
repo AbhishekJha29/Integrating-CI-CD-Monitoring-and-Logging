@@ -64,10 +64,16 @@ app.get('/metrics', async (req, res) => {
 // Port configuration: use PORT environment variable or fall back to port 3000
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(JSON.stringify({
-    time: new Date().toISOString(),
-    level: 'info',
-    message: `Server listening on port ${PORT}`
-  }));
-});
+// Only start the server when run directly (not when required by tests)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(JSON.stringify({
+      time: new Date().toISOString(),
+      level: 'info',
+      message: `Server listening on port ${PORT}`
+    }));
+  });
+}
+
+// Export app for integration tests
+module.exports = app;
