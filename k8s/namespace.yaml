@@ -1,6 +1,0 @@
-# Kubernetes Namespace for isolating the demo application workloads
-apiVersion: v1
-kind: Namespace
-metadata:
-  # Name of the namespace
-  name: demo
