@@ -6,6 +6,10 @@ on:
   push:
     branches:
       - main
+    # Ignore manifest changes to prevent recursive CI triggering when the update-manifest job pushes changes back to main
+    paths-ignore:
+      - 'k8s/**'
+      - 'argocd/**'
 
 # Top-level permissions: read repo contents and allow writing packages to GHCR
 permissions:
@@ -94,3 +98,39 @@ jobs:
           tags: |
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.IMAGE_NAME }}:latest
+
+  # Job 3: Update deployment manifest image tag and commit back to main (GitOps CD trigger)
+  update-manifest:
+    name: Update Deployment Manifest
+    needs: build-and-scan
+    # Runs ONLY on push to main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      # Write permission needed to commit and push the updated manifest back to the repository
+      contents: write
+    steps:
+      # Check out repository to modify manifests
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Replace image tag in k8s/deployment.yaml with the current commit SHA using sed
+      - name: Update image tag in k8s/deployment.yaml
+        run: |
+          IMAGE_NAME="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          # Replace the current image tag with the commit SHA
+          sed -i -E "s|image: ${IMAGE_NAME}:.*|image: ${IMAGE_NAME}:${{ github.sha }}|" k8s/deployment.yaml
+
+      # Commit and push changes as github-actions[bot] if the manifest changed
+      - name: Commit and push manifest update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git status --porcelain | grep -q 'k8s/deployment.yaml'; then
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            git add k8s/deployment.yaml
+            git commit -m "chore: deploy ${SHORT_SHA} [skip ci]"
+            git push
+          else
+            echo "No manifest changes detected"
+          fi

@@ -1,1 +1,6 @@
+# Node dependencies
 node_modules
+
+# Kubeconfig files that may be generated or extracted locally
+kubeconfig*
+*.kubeconfig

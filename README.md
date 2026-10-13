@@ -65,12 +65,14 @@ This project uses GitHub Actions (`.github/workflows/ci.yml`) for automated test
   1. Executes the exact same test, build, and Trivy security scanning steps.
   2. Authenticates with GitHub Container Registry (`ghcr.io`).
   3. Pushes the validated Docker image tagged with both the commit SHA (`:<sha>`) and `:latest`.
+  4. Triggers the CD manifest update job to bump the image tag in `k8s/deployment.yaml`.
 
 - **Finding Pushed Images:**
   Published images are available on GitHub under your repository's **Packages** page (`ghcr.io/<owner>/<repo>:<tag>`).
 
-## Upcoming Phases
+## Continuous Deployment (CD)
 
-- **Phase 2: Continuous Deployment (CD)** - Automated deployment pipeline to target container environment.
-- **Phase 3: Monitoring** - Prometheus metrics scraping and Grafana dashboards for observability.
-- **Phase 4: Logging** - Centralized log aggregation and querying from stdout JSON streams.
+Continuous Deployment is handled using GitOps via Argo CD targeting a local Kubernetes cluster (Docker Desktop Kubernetes or kind):
+
+1. **Automated Manifest Update:** When code is merged to `main`, the CI workflow builds and pushes the new container image to GHCR, then runs the `update-manifest` job to replace the image tag in `k8s/deployment.yaml` with the new commit SHA and commits the change back to `main`.
+2. **GitOps Sync:** Argo CD monitors the Git repository. Upon detecting changes to `k8s/`, it automatically synchronizes and applies the manifests (`namespace.yaml`, `deployment.yaml`, `service.yaml`) to the `demo` namespace in the local cluster with zero downtime.
