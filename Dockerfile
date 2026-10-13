@@ -1,6 +1,9 @@
 # Use lightweight Node.js 20 Alpine Linux base image
 FROM node:20-alpine
 
+# Link published package in GitHub Container Registry (GHCR) to this repository
+LABEL org.opencontainers.image.source="https://github.com/AbhishekJha29/Integrating-CI-CD-Monitoring-and-Logging"
+
 # Set working directory inside the container
 WORKDIR /usr/src/app
 

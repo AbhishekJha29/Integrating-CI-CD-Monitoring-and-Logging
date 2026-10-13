@@ -1,6 +1,6 @@
-# DevOps Demo Application (Phase 0)
+# DevOps Demo Application
 
-A minimal, production-style Node.js and Express service created as Phase 0 of a practical DevOps learning project. This project focuses strictly on CI, CD, monitoring, and logging across incremental phases without unnecessary complexity.
+A minimal, production-style Node.js and Express service created as part of a practical DevOps learning project covering CI, CD, monitoring, and logging across incremental phases.
 
 ## Endpoints
 
@@ -21,9 +21,33 @@ npm start
 docker compose up --build
 ```
 
+### Running Tests
+```powershell
+npm test
+```
+
+## CI (Continuous Integration)
+
+This repository includes an automated GitHub Actions CI pipeline (`.github/workflows/ci.yml`):
+
+- **On Pull Requests (any branch):**
+  - Runs automated unit tests (`npm test`).
+  - Builds the container image locally.
+  - Scans the image for vulnerabilities with Trivy (fails only on CRITICAL vulnerabilities).
+  - *Does not push the image to any registry.*
+
+- **On Push / Merge to `main`:**
+  - Runs tests, builds the image, and scans it with Trivy.
+  - Logs into GitHub Container Registry (`ghcr.io`).
+  - Pushes the image tagged with both the commit SHA (`<image>:<commit-sha>`) and `:latest`.
+  - Verifies the image manifest in GHCR using `docker buildx imagetools inspect`.
+
+- **Where Pushed Images Appear:**
+  - Published container images appear under the **Packages** tab on your GitHub profile (`https://github.com/<owner>?tab=packages`).
+
 ## Future Phases
 
-- **Phase 1: CI (Continuous Integration)** — Automated linting, verification, and container builds.
+- **Phase 1: CI (Continuous Integration)** — Automated testing, container scanning, and GHCR publishing.
 - **Phase 2: CD (Continuous Delivery/Deployment)** — Automated deployment workflows.
 - **Phase 3: Monitoring** — Prometheus scraping and Grafana dashboard visualization.
 - **Phase 4: Logging** — Centralized log collection and analysis using structured stdout JSON.

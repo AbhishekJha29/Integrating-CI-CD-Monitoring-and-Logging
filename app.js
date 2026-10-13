@@ -68,11 +68,16 @@ app.get('/metrics', async (req, res) => {
   }
 });
 
-// Start the Express server
-app.listen(PORT, () => {
-  console.log(JSON.stringify({
-    time: new Date().toISOString(),
-    level: 'info',
-    message: `Server listening on port ${PORT}`,
-  }));
-});
+// Start the Express server only when executed directly (not when imported by test suites)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(JSON.stringify({
+      time: new Date().toISOString(),
+      level: 'info',
+      message: `Server listening on port ${PORT}`,
+    }));
+  });
+}
+
+// Export the Express application instance for automated testing
+module.exports = app;
