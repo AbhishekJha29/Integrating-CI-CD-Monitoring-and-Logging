@@ -1,26 +1,31 @@
-# Use minimal Node.js Alpine base image
-FROM node:20-alpine
+# Use lightweight Node.js 20 Alpine Linux base image
+FROM node:22-alpine
 
-# Set working directory for the application
+# Link published package in GitHub Container Registry (GHCR) to this repository
+LABEL org.opencontainers.image.source="https://github.com/AbhishekJha29/Integrating-CI-CD-Monitoring-and-Logging"
+
+# Set working directory inside the container
 WORKDIR /usr/src/app
 
-# Copy package manifests first to optimize Docker layer caching
+# Copy dependency manifests first to leverage Docker layer caching
 COPY package*.json ./
 
-# Install only production dependencies cleanly and reliably
+# Install production dependencies only using npm ci for deterministic, clean builds
 RUN npm ci --omit=dev
 
-# Copy the rest of the application files
+# Copy the rest of the application source code
 COPY . .
 
-# Set file ownership to non-root node user provided by the alpine base image
-RUN chown -R node:node /usr/src/app
+# npm/npx are only needed to install dependencies, not to run the app.
+# Removing them shrinks the image and removes npm's bundled packages
+# (including the vulnerable tar) from what we ship.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
-# Switch to non-root user for security best practices
+# Run as non-root 'node' user for security hardening
 USER node
 
-# Expose service port
+# Document port 3000 exposure
 EXPOSE 3000
 
-# Start the application using Node.js
+# Specify container start command
 CMD ["node", "app.js"]

@@ -1,54 +1,53 @@
-# DevOps Demo App - Phase 0
+# DevOps Demo Application
 
-A minimal, production-like Node.js + Express microservice designed as the foundation for a DevOps learning journey.
+A minimal, production-style Node.js and Express service created as part of a practical DevOps learning project covering CI, CD, monitoring, and logging across incremental phases.
 
 ## Endpoints
 
-- `GET /` - Returns JSON `{"message": "Hello from the DevOps demo app"}`
-- `GET /health` - Health check probe returning JSON `{"status": "ok"}`
-- `GET /metrics` - Prometheus metrics scraped by monitoring tools, exposing default process metrics and custom counter `http_requests_total` with `method`, `route`, and `status` labels.
+- `GET /`: Returns JSON greeting (`{ "message": "Hello from the DevOps demo app" }`).
+- `GET /health`: Returns JSON health status (`{ "status": "ok" }`).
+- `GET /metrics`: Exposes Prometheus metrics (Node.js default runtime metrics + custom `http_requests_total` counter).
 
-Every incoming request also emits a single structured JSON log line to `stdout` containing `time`, `level`, `method`, `path`, and `status`.
+## Running the Application
 
-## How to Run
-
-### Option 1: Run Locally
-
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-2. Start the server:
-   ```bash
-   npm start
-   ```
-
-The service will run at `http://localhost:3000`.
-
-### Option 2: Run with Docker Compose
-
-1. Build and run the container:
-   ```bash
-   docker compose up --build
-   ```
-
-2. Stop the container when finished:
-   ```bash
-   docker compose down
-   ```
-
-## Testing the Endpoints
-
-```bash
-curl http://localhost:3000/
-curl http://localhost:3000/health
-curl http://localhost:3000/metrics
+### Option 1: Locally with Node.js
+```powershell
+npm install
+npm start
 ```
 
-## Upcoming Phases
+### Option 2: Using Docker Compose
+```powershell
+docker compose up --build
+```
 
-- **Phase 1: Continuous Integration (CI)** - Automated linting, testing, and Docker image validation on pull requests.
-- **Phase 2: Continuous Deployment (CD)** - Automated deployment pipeline to container registry and target environment.
-- **Phase 3: Monitoring** - Prometheus metrics scraping and Grafana dashboards for observability.
-- **Phase 4: Logging** - Centralized log aggregation and querying from stdout JSON streams.
+### Running Tests
+```powershell
+npm test
+```
+
+## CI (Continuous Integration)
+
+This repository includes an automated GitHub Actions CI pipeline (`.github/workflows/ci.yml`):
+
+- **On Pull Requests (any branch):**
+  - Runs automated unit tests (`npm test`).
+  - Builds the container image locally.
+  - Scans the image for vulnerabilities with Trivy (fails only on CRITICAL vulnerabilities).
+  - *Does not push the image to any registry.*
+
+- **On Push / Merge to `main`:**
+  - Runs tests, builds the image, and scans it with Trivy.
+  - Logs into GitHub Container Registry (`ghcr.io`).
+  - Pushes the image tagged with both the commit SHA (`<image>:<commit-sha>`) and `:latest`.
+  - Verifies the image manifest in GHCR using `docker buildx imagetools inspect`.
+
+- **Where Pushed Images Appear:**
+  - Published container images appear under the **Packages** tab on your GitHub profile (`https://github.com/<owner>?tab=packages`).
+
+## Future Phases
+
+- **Phase 1: CI (Continuous Integration)** — Automated testing, container scanning, and GHCR publishing.
+- **Phase 2: CD (Continuous Delivery/Deployment)** — Automated deployment workflows.
+- **Phase 3: Monitoring** — Prometheus scraping and Grafana dashboard visualization.
+- **Phase 4: Logging** — Centralized log collection and analysis using structured stdout JSON.

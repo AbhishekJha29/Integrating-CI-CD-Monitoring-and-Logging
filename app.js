@@ -1,39 +1,46 @@
+// Import Express web framework
 const express = require('express');
+
+// Import prom-client to capture and expose Prometheus metrics
 const client = require('prom-client');
 
 const app = express();
 
-// Enable default system/process metrics collection (CPU, memory, event loop lag, etc.)
+// Port configuration: read from PORT environment variable, defaulting to 3000
+const PORT = process.env.PORT || 3000;
+
+// Collect default Node.js and runtime metrics (heap memory, event loop lag, CPU, etc.)
 client.collectDefaultMetrics();
 
-// Custom counter to track total HTTP requests with dimensional labels
+// Define a custom Prometheus counter to count HTTP requests labeled by method, route, and HTTP status
 const httpRequestCounter = new client.Counter({
   name: 'http_requests_total',
-  help: 'Total number of HTTP requests handled',
-  labelNames: ['method', 'route', 'status']
+  help: 'Total number of HTTP requests received',
+  labelNames: ['method', 'route', 'status'],
 });
 
-// Middleware for request metrics tracking and structured JSON logging
-// Attached to the 'finish' event so we can capture the final HTTP status and resolved route
+// Middleware for request metrics tracking and structured JSON logging to stdout
 app.use((req, res, next) => {
+  // Wait until the response is sent to capture the final status code and resolved route
   res.on('finish', () => {
-    // Extract route pattern (e.g. /health) if matched to avoid high-cardinality label values; fallback to path
     const route = req.route ? req.route.path : req.path;
+    const status = res.statusCode;
+    const method = req.method;
 
-    // Increment Prometheus counter
+    // Increment custom Prometheus counter with label values
     httpRequestCounter.inc({
-      method: req.method,
+      method: method,
       route: route,
-      status: res.statusCode
+      status: status,
     });
 
-    // Output single structured JSON log line to stdout for observability and log shipping
+    // Write a single structured JSON log line to stdout for log aggregators
     const logEntry = {
       time: new Date().toISOString(),
       level: 'info',
-      method: req.method,
-      path: req.originalUrl || req.path,
-      status: res.statusCode
+      method: method,
+      path: req.path,
+      status: status,
     };
     console.log(JSON.stringify(logEntry));
   });
@@ -41,17 +48,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Root endpoint: basic greeting response
+// Root endpoint: simple greeting response
 app.get('/', (req, res) => {
   res.json({ message: 'Hello from the DevOps demo app' });
 });
 
-// Health endpoint: used by container orchestrators/load balancers for liveness and readiness probes
+// Health check endpoint: used by container orchestrators and monitoring to verify liveness/readiness
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Metrics endpoint: scraped by Prometheus collectors
+// Prometheus metrics endpoint: scraped by Prometheus server
 app.get('/metrics', async (req, res) => {
   try {
     res.set('Content-Type', client.register.contentType);
@@ -61,13 +68,16 @@ app.get('/metrics', async (req, res) => {
   }
 });
 
-// Port configuration: use PORT environment variable or fall back to port 3000
-const PORT = process.env.PORT || 3000;
+// Start the Express server only when executed directly (not when imported by test suites)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(JSON.stringify({
+      time: new Date().toISOString(),
+      level: 'info',
+      message: `Server listening on port ${PORT}`,
+    }));
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(JSON.stringify({
-    time: new Date().toISOString(),
-    level: 'info',
-    message: `Server listening on port ${PORT}`
-  }));
-});
+// Export the Express application instance for automated testing
+module.exports = app;
