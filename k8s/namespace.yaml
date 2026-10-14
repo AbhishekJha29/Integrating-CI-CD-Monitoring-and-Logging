@@ -1,0 +1,6 @@
+# Kubernetes Namespace resource to isolate application resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  # Name of the dedicated namespace for this demo application
+  name: demo

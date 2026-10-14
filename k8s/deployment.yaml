@@ -1,0 +1,57 @@
+# Deployment definition to manage Pod lifecycle, replicas, and rolling updates
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-api
+  namespace: demo
+  labels:
+    app: demo-api
+spec:
+  # Maintain 2 redundant pod replicas for high availability
+  replicas: 2
+  selector:
+    matchLabels:
+      app: demo-api
+  template:
+    metadata:
+      labels:
+        app: demo-api
+      annotations:
+        # Scrape configuration annotations used later in the monitoring phase by Prometheus
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          # CI will replace the tag with the commit SHA after each merge
+          image: ghcr.io/abhishekjha29/integrating-ci-cd-monitoring-and-logging:latest
+          ports:
+            # Application listening port defined inside container
+            - containerPort: 3000
+          env:
+            # Express server port environment variable
+            - name: PORT
+              value: "3000"
+          resources:
+            # Resource constraints to ensure predictable scheduling and prevent memory leaks
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          # Readiness probe ensures traffic is routed only after application is ready
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          # Liveness probe restarts deadlocked or crashed containers automatically
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
