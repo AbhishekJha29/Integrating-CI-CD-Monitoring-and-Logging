@@ -1,0 +1,26 @@
+# Argo CD Application configuring GitOps continuous deployment from Git repository to Kubernetes
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo-api
+  namespace: argocd
+spec:
+  project: default
+  source:
+    # Target GitHub repository storing Kubernetes manifests (preserves original casing from .git/config)
+    repoURL: https://github.com/AbhishekJha29/Integrating-CI-CD-Monitoring-and-Logging.git
+    targetRevision: main
+    path: k8s
+  destination:
+    # In-cluster API server endpoint and destination namespace
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      # prune: Automatically deletes resources in Kubernetes if they are removed from Git
+      prune: true
+      # selfHeal: Automatically reverts manual/out-of-band edits in Kubernetes back to Git state
+      selfHeal: true
+    syncOptions:
+      # Automatically creates destination namespace 'demo' if it does not already exist
+      - CreateNamespace=true

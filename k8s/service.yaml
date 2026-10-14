@@ -1,0 +1,17 @@
+# Internal Service routing incoming traffic to matching demo-api pods
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-api
+  namespace: demo
+  labels:
+    app: demo-api
+spec:
+  # Internal cluster IP; reachable locally using kubectl port-forward
+  type: ClusterIP
+  selector:
+    app: demo-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000

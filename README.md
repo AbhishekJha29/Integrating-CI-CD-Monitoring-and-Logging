@@ -45,9 +45,18 @@ This repository includes an automated GitHub Actions CI pipeline (`.github/workf
 - **Where Pushed Images Appear:**
   - Published container images appear under the **Packages** tab on your GitHub profile (`https://github.com/<owner>?tab=packages`).
 
+## CD (Continuous Delivery)
+
+Continuous Delivery is managed via GitOps using Argo CD running on a local Docker Desktop Kubernetes cluster:
+
+1. **Merge to `main`**: A feature branch is merged into `main`.
+2. **CI Builds & Pushes**: GitHub Actions tests, builds, scans, and pushes the container image to GHCR.
+3. **Manifest Tag Update**: The `update-manifest` workflow job modifies the image tag in `k8s/deployment.yaml` with the commit SHA and pushes `chore: deploy <sha> [skip ci]` directly to `main`.
+4. **GitOps Sync**: Argo CD continuously monitors the repository, detects the updated manifest in Git, and automatically synchronizes (prunes and self-heals) the state into the `demo` namespace in the Docker Desktop Kubernetes cluster.
+
 ## Future Phases
 
 - **Phase 1: CI (Continuous Integration)** — Automated testing, container scanning, and GHCR publishing.
-- **Phase 2: CD (Continuous Delivery/Deployment)** — Automated deployment workflows.
+- **Phase 2: CD (Continuous Delivery/Deployment)** — GitOps delivery with Argo CD on Docker Desktop Kubernetes.
 - **Phase 3: Monitoring** — Prometheus scraping and Grafana dashboard visualization.
 - **Phase 4: Logging** — Centralized log collection and analysis using structured stdout JSON.
