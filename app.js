@@ -1,6 +1,9 @@
 // Import Express web framework
 const express = require('express');
 
+// Import Node.js built-in crypto module for generating unique request IDs
+const crypto = require('crypto');
+
 // Import prom-client to capture and expose Prometheus metrics
 const client = require('prom-client');
 
@@ -27,8 +30,12 @@ const httpRequestDuration = new client.Histogram({
   buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
 });
 
-// Middleware for request metrics tracking and structured JSON logging to stdout
+// Middleware for request metrics tracking, request correlation IDs, and structured JSON logging
 app.use((req, res, next) => {
+  // Generate a unique Request ID and propagate via X-Request-Id HTTP response header
+  const requestId = crypto.randomUUID();
+  res.setHeader('X-Request-Id', requestId);
+
   // Capture high-resolution start time for accurate duration calculation
   const start = process.hrtime();
 
@@ -61,13 +68,22 @@ app.use((req, res, next) => {
       durationSeconds
     );
 
-    // Write a single structured JSON log line to stdout for log aggregators
+    // Determine structured log level according to HTTP status code
+    let level = 'info';
+    if (status >= 500) {
+      level = 'error';
+    } else if (status >= 400) {
+      level = 'warn';
+    }
+
+    // Write a single structured JSON log line to stdout for log aggregators (Alloy -> Loki)
     const logEntry = {
       time: new Date().toISOString(),
-      level: 'info',
+      level: level,
       method: method,
       path: req.path,
       status: status,
+      requestId: requestId,
     };
     console.log(JSON.stringify(logEntry));
   });

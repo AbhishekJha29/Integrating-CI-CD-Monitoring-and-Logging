@@ -1,0 +1,155 @@
+# ServiceAccount for Grafana Alloy to authenticate with Kubernetes API
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alloy
+  namespace: monitoring
+---
+# ClusterRole providing read access to pods, pod logs, and cluster metadata for log discovery
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: alloy
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - namespaces
+      - nodes
+      - events
+    verbs: ["get", "list", "watch"]
+---
+# Bind Alloy ServiceAccount to the ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: alloy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: alloy
+subjects:
+  - kind: ServiceAccount
+    name: alloy
+    namespace: monitoring
+---
+# ConfigMap containing Grafana Alloy pipeline configuration in River syntax
+# Note: This configuration follows the official Grafana Alloy documentation:
+# https://grafana.com/docs/alloy/v1.7/reference/components/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: monitoring
+data:
+  config.alloy: |
+    // Discover pods in the 'demo' namespace using Kubernetes API
+    discovery.kubernetes "demo_pods" {
+      role = "pod"
+      namespaces {
+        names = ["demo"]
+      }
+    }
+
+    // Relabel Kubernetes metadata into standard Loki stream labels (namespace, pod, container, app)
+    discovery.relabel "demo_api" {
+      targets = discovery.kubernetes.demo_pods.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app"]
+        target_label  = "app"
+      }
+    }
+
+    // Stream pod stdout/stderr logs directly through the Kubernetes API (no host filesystem mounts needed)
+    loki.source.kubernetes "demo_logs" {
+      targets    = discovery.relabel.demo_api.output
+      forward_to = [loki.write.local_loki.receiver]
+    }
+
+    // Ship collected logs to the Loki push API endpoint
+    loki.write "local_loki" {
+      endpoint {
+        url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+      }
+    }
+---
+# Grafana Alloy Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alloy
+  namespace: monitoring
+  labels:
+    app: alloy
+spec:
+  # One replica is sufficient for a single-node local learning cluster
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alloy
+  template:
+    metadata:
+      labels:
+        app: alloy
+    spec:
+      serviceAccountName: alloy
+      containers:
+        - name: alloy
+          # Pinned to stable release. Check https://github.com/grafana/alloy/releases for newer versions.
+          image: grafana/alloy:v1.7.5
+          args:
+            - "run"
+            - "/etc/alloy/config.alloy"
+            - "--server.http.listen-addr=0.0.0.0:12345"
+            - "--storage.path=/tmp/alloy"
+          ports:
+            - name: http-ui
+              containerPort: 12345
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+      volumes:
+        - name: config
+          configMap:
+            name: alloy-config
+---
+# ClusterIP service exposing Alloy internal HTTP UI and diagnostics on port 12345
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy
+  namespace: monitoring
+  labels:
+    app: alloy
+spec:
+  type: ClusterIP
+  selector:
+    app: alloy
+  ports:
+    - name: ui
+      port: 12345
+      targetPort: 12345

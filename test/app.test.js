@@ -16,6 +16,18 @@ describe('DevOps Demo API Endpoints', () => {
     assert.deepStrictEqual(res.body, { message: 'Hello from the DevOps demo app' });
   });
 
+  // Test X-Request-Id correlation header
+  it('GET / should include x-request-id response header', async () => {
+    const res = await request(app).get('/');
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.headers['x-request-id'], 'Expected x-request-id header in response');
+    assert.match(
+      res.headers['x-request-id'],
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      'Expected x-request-id to be a valid UUID'
+    );
+  });
+
   // Test health check endpoint
   it('GET /health should return 200 and status ok', async () => {
     const res = await request(app).get('/health');

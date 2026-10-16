@@ -4,7 +4,7 @@ A minimal, production-style Node.js and Express service created as part of a pra
 
 ## Endpoints
 
-- `GET /`: Returns JSON greeting (`{ "message": "Hello from the DevOps demo app" }`).
+- `GET /`: Returns JSON greeting (`{ "message": "Hello from the DevOps demo app" }`) and sets `X-Request-Id` header.
 - `GET /health`: Returns JSON health status (`{ "status": "ok" }`).
 - `GET /error`: Returns HTTP 500 (`{ "error": "intentional failure for testing alerts" }`) to simulate failures.
 - `GET /metrics`: Exposes Prometheus metrics (Node.js runtime metrics + custom `http_requests_total` counter and `http_request_duration_seconds` histogram).
@@ -69,28 +69,59 @@ The `monitoring/` directory provisions an in-cluster observability stack using P
 - `HighMemory`: Fires if resident memory of a `demo-api` pod exceeds 100MB for 2 minutes.
 - `SlowRequests`: Fires if 95th percentile request latency exceeds 500ms over a 2-minute window.
 
-### Accessing the Dashboards
+### Accessing Prometheus
 
-- **Prometheus UI**:
-  ```powershell
-  kubectl port-forward -n monitoring svc/prometheus 9090:9090
-  ```
-  Open `http://localhost:9090` in your browser.
+```powershell
+kubectl port-forward -n monitoring svc/prometheus 9090:9090
+```
+Open `http://localhost:9090` in your browser.
 
-- **Grafana UI**:
-  ```powershell
-  kubectl port-forward -n monitoring svc/grafana 3001:80
+## Logging
+
+The logging architecture uses **Grafana Alloy** for log collection and **Grafana Loki** for indexing and storage:
+
+- **Grafana Alloy**: Discovers `demo-api` pods via the Kubernetes API, extracts container logs, attaches labels (`namespace`, `pod`, `container`, `app`), and pushes them directly to Loki.
+- **Why Alloy instead of Promtail?**: Promtail reached its official End of Life (EOL) on March 2, 2026. Grafana Alloy is the official unified, next-generation collector for logs, metrics, and traces across the Grafana ecosystem.
+- **Grafana Loki**: Minimal single-binary log aggregation database configured with TSDB index and filesystem storage.
+
+### Useful LogQL Queries
+
+- **All Demo API logs**:
+  ```logql
+  {namespace="demo", app="demo-api"}
   ```
-  Open `http://localhost:3001` in your browser.
-  - **Username**: `admin`
-  - **Password**: `admin`
+- **Parse JSON logs and filter by level (errors only)**:
+  ```logql
+  {namespace="demo", app="demo-api"} | json | level="error"
+  ```
+- **Log volume rate over time grouped by level**:
+  ```logql
+  sum by (level) (count_over_time({namespace="demo", app="demo-api"} | json [1m]))
+  ```
+- **Trace a single request using its correlation ID**:
+  ```logql
+  {namespace="demo", app="demo-api"} |= "<requestId>"
+  ```
+
+### Accessing Grafana (Metrics & Logs)
+
+```powershell
+kubectl port-forward -n monitoring svc/grafana 3001:80
+```
+Open `http://localhost:3001` in your browser:
+- **Username**: `admin`
+- **Password**: `admin`
+- **Dashboards**:
+  - `Demo API - Golden Signals` (Prometheus metrics)
+  - `Demo API - Logs` (Loki logs with request ID filtering)
 
 > [!WARNING]
 > The Grafana credentials (`admin` / `admin`) are hardcoded for this local learning environment only. Production deployments should use Kubernetes Secrets or an external secret store.
 
-## Future Phases
+## Project Phases (Complete)
 
-- **Phase 1: CI (Continuous Integration)** — Automated testing, container scanning, and GHCR publishing.
+- **Phase 0: Base Service** — Minimal Node.js Express service, Dockerfile, and docker-compose.
+- **Phase 1: CI (Continuous Integration)** — Automated testing, container scanning (Trivy), and GHCR publishing.
 - **Phase 2: CD (Continuous Delivery/Deployment)** — GitOps delivery with Argo CD on Docker Desktop Kubernetes.
-- **Phase 3: Monitoring** — Prometheus scraping and Grafana dashboard visualization.
-- **Phase 4: Logging** — Centralized log collection and analysis using structured stdout JSON.
+- **Phase 3: Monitoring** — Prometheus metrics scraping, alerting rules, and Grafana Golden Signals dashboard.
+- **Phase 4: Logging** — Structured JSON logging with request correlation IDs, Grafana Alloy collector, Loki store, and Grafana Logs dashboard.
