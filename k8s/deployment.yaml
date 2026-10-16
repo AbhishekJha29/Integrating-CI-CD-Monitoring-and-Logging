@@ -25,7 +25,7 @@ spec:
       containers:
         - name: api
           # CI will replace the tag with the commit SHA after each merge
-          image: ghcr.io/abhishekjha29/integrating-ci-cd-monitoring-and-logging:643622de3b3181788d9dc5118f701bf8d7f5ab73
+          image: ghcr.io/abhishekjha29/integrating-ci-cd-monitoring-and-logging:8f87643d25d75c8779bbb6d01b39c20f8c1387cc
           ports:
             # Application listening port defined inside container
             - containerPort: 3000
