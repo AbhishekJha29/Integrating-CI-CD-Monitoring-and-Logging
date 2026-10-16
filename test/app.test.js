@@ -23,6 +23,13 @@ describe('DevOps Demo API Endpoints', () => {
     assert.deepStrictEqual(res.body, { status: 'ok' });
   });
 
+  // Test error endpoint used for triggering 5xx alert rules
+  it('GET /error should return 500 and intentional failure message', async () => {
+    const res = await request(app).get('/error');
+    assert.strictEqual(res.status, 500);
+    assert.deepStrictEqual(res.body, { error: 'intentional failure for testing alerts' });
+  });
+
   // Test Prometheus metrics endpoint
   it('GET /metrics should return 200 and expose http_requests_total metric', async () => {
     const res = await request(app).get('/metrics');
@@ -30,6 +37,10 @@ describe('DevOps Demo API Endpoints', () => {
     assert.ok(
       res.text.includes('http_requests_total'),
       'Expected Prometheus metrics output to include http_requests_total'
+    );
+    assert.ok(
+      res.text.includes('http_request_duration_seconds'),
+      'Expected Prometheus metrics output to include http_request_duration_seconds'
     );
   });
 });

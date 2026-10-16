@@ -1,0 +1,204 @@
+# ServiceAccount used by Prometheus to query Kubernetes API for pod discovery
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+# ClusterRole granting read permissions for Kubernetes service discovery
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  # Permissions to discover pods, endpoints, services, and nodes for scraping
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+---
+# Bind the prometheus ServiceAccount in monitoring namespace to the ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
+---
+# Prometheus main configuration file
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      # Scrape targets every 15 seconds
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    # Load alerting rules from the mounted rules volume
+    rule_files:
+      - /etc/prometheus/rules/alerts.yml
+
+    scrape_configs:
+      # Scrape job for demo-api pods in demo namespace discovered dynamically via Kubernetes API
+      - job_name: 'demo-api'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - demo
+        relabel_configs:
+          # Only scrape pods that have annotation prometheus.io/scrape: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          # Override metrics path if annotation prometheus.io/path is set
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          # Construct target address using pod IP and annotated port (e.g., 10.1.0.5:3000)
+          - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: (.+);(.+)
+            replacement: $1:$2
+            target_label: __address__
+          # Map pod name to label "pod" for easier dashboard filtering
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+          # Map namespace to label "namespace"
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+---
+# Prometheus alerting rules definition
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: monitoring
+data:
+  alerts.yml: |
+    groups:
+      - name: demo-api-alerts
+        rules:
+          # Alert when all demo-api pods are down or unreachable for 1 minute
+          - alert: AppDown
+            expr: up{job="demo-api"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Demo API instance is completely unreachable"
+
+          # Alert when 5xx errors exceed 5% of total traffic over a 2-minute window
+          - alert: HighErrorRate
+            expr: (sum(rate(http_requests_total{status=~"5.."}[2m])) / sum(rate(http_requests_total[2m]))) > 0.05
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "HTTP 5xx error rate exceeds 5% of total requests over 2 minutes"
+
+          # Alert when resident memory usage of a demo-api process exceeds 100MB for 2 minutes
+          - alert: HighMemory
+            expr: process_resident_memory_bytes{job="demo-api"} > 100000000
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Demo API resident memory consumption is above 100MB"
+
+          # Alert when 95% of requests take longer than 500ms over a 2-minute window
+          - alert: SlowRequests
+            expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[2m])) by (le)) > 0.5
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "95th percentile request latency exceeds 500ms"
+---
+# Prometheus server deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          # Pinned to stable version. Check https://github.com/prometheus/prometheus/releases for newer versions.
+          image: prom/prometheus:v3.2.1
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+          ports:
+            - containerPort: 9090
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: rules-volume
+              mountPath: /etc/prometheus/rules
+            - name: storage-volume
+              mountPath: /prometheus
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus-config
+        - name: rules-volume
+          configMap:
+            name: prometheus-rules
+        # Ephemeral storage: historical metrics data is lost on container restart (sufficient for local learning)
+        - name: storage-volume
+          emptyDir: {}
+---
+# ClusterIP service exposing Prometheus server internally on port 9090
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus
+  ports:
+    - name: web
+      port: 9090
+      targetPort: 9090
