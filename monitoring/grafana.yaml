@@ -1,4 +1,4 @@
-# Provisioning configuration that connects Grafana to the in-cluster Prometheus service
+# Provisioning configuration connecting Grafana to in-cluster Prometheus and Loki datasources
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,10 +9,18 @@ data:
     apiVersion: 1
     datasources:
       - name: Prometheus
+        uid: prometheus
         type: prometheus
         access: proxy
         url: http://prometheus.monitoring.svc.cluster.local:9090
         isDefault: true
+        editable: false
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc.cluster.local:3100
+        isDefault: false
         editable: false
 ---
 # Dashboard provider instructing Grafana to load file-based dashboards automatically
@@ -34,7 +42,7 @@ data:
         options:
           path: /var/lib/grafana/dashboards
 ---
-# Pre-packaged Grafana dashboard JSON defining the Golden Signals panels
+# Pre-packaged Grafana dashboards for metrics (Golden Signals) and logs (Loki)
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -158,6 +166,114 @@ data:
       "timezone": "browser",
       "title": "Demo API - Golden Signals",
       "uid": "demo-api-golden-signals",
+      "version": 1
+    }
+  demo-api-logs.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "id": 1,
+          "title": "All Logs",
+          "type": "logs",
+          "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "targets": [
+            {
+              "expr": "{namespace=\"demo\", app=\"demo-api\"}",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showLabels": false,
+            "wrapLogMessage": true,
+            "enableLogDetails": true,
+            "sortOrder": "Descending"
+          }
+        },
+        {
+          "id": 2,
+          "title": "Log Volume by Level",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "targets": [
+            {
+              "expr": "sum by (level) (count_over_time({namespace=\"demo\", app=\"demo-api\"} | json [1m]))",
+              "legendFormat": "{{level}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Error Logs Only",
+          "type": "logs",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "targets": [
+            {
+              "expr": "{namespace=\"demo\", app=\"demo-api\"} | json | level=\"error\"",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showLabels": false,
+            "wrapLogMessage": true,
+            "enableLogDetails": true,
+            "sortOrder": "Descending"
+          }
+        },
+        {
+          "id": 4,
+          "title": "Filter by Request ID",
+          "type": "logs",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 17 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "targets": [
+            {
+              "expr": "{namespace=\"demo\", app=\"demo-api\"} |= \"$requestId\"",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showLabels": false,
+            "wrapLogMessage": true,
+            "enableLogDetails": true,
+            "sortOrder": "Descending"
+          }
+        }
+      ],
+      "schemaVersion": 38,
+      "style": "dark",
+      "tags": ["demo", "logs"],
+      "templating": {
+        "list": [
+          {
+            "current": { "selected": false, "text": "", "value": "" },
+            "hide": 0,
+            "label": "Request ID",
+            "name": "requestId",
+            "options": [
+              { "selected": true, "text": "", "value": "" }
+            ],
+            "query": "",
+            "skipUrlSync": false,
+            "type": "textbox"
+          }
+        ]
+      },
+      "time": { "from": "now-15m", "to": "now" },
+      "timepicker": { "refresh_intervals": ["5s", "10s", "30s"] },
+      "timezone": "browser",
+      "title": "Demo API - Logs",
+      "uid": "demo-api-logs",
       "version": 1
     }
 ---

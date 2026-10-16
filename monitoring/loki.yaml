@@ -1,0 +1,124 @@
+# ConfigMap containing minimal single-binary Loki 3.x configuration
+# Note: This configuration follows the official Grafana Loki 3.x documentation:
+# https://grafana.com/docs/loki/v3.4.x/configure/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+  namespace: monitoring
+data:
+  loki.yaml: |
+    # Disable multi-tenancy for simple local cluster operation
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+      log_level: info
+
+    common:
+      path_prefix: /loki
+      storage:
+        filesystem:
+          chunks_directory: /loki/chunks
+          rules_directory: /loki/rules
+      replication_factor: 1
+      ring:
+        instance_addr: 127.0.0.1
+        kvstore:
+          store: inmemory
+
+    schema_config:
+      configs:
+        - from: 2024-01-01
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+    limits_config:
+      # Short retention-friendly setup to keep storage and memory footprint minimal on Docker Desktop
+      retention_period: 24h
+      reject_old_samples: true
+      reject_old_samples_max_age: 12h
+      max_query_series: 500
+
+    analytics:
+      # Disable telemetry and usage reporting
+      reporting_enabled: false
+---
+# Loki single-instance Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  namespace: monitoring
+  labels:
+    app: loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+    spec:
+      securityContext:
+        fsGroup: 10001
+        runAsUser: 10001
+        runAsNonRoot: true
+      containers:
+        - name: loki
+          # Pinned to stable Loki 3.x release. Check https://github.com/grafana/loki/releases for newer versions.
+          image: grafana/loki:3.4.2
+          args:
+            - "-config.file=/etc/loki/loki.yaml"
+          ports:
+            - name: http-metrics
+              containerPort: 3100
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki/loki.yaml
+              subPath: loki.yaml
+            - name: storage
+              mountPath: /loki
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+        # Ephemeral emptyDir storage: logs are discarded when Loki pod restarts (ideal for local learning)
+        - name: storage
+          emptyDir: {}
+---
+# ClusterIP service exposing Loki internally for ingestion (Alloy) and querying (Grafana)
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: monitoring
+  labels:
+    app: loki
+spec:
+  type: ClusterIP
+  selector:
+    app: loki
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
