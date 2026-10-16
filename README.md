@@ -6,7 +6,8 @@ A minimal, production-style Node.js and Express service created as part of a pra
 
 - `GET /`: Returns JSON greeting (`{ "message": "Hello from the DevOps demo app" }`).
 - `GET /health`: Returns JSON health status (`{ "status": "ok" }`).
-- `GET /metrics`: Exposes Prometheus metrics (Node.js default runtime metrics + custom `http_requests_total` counter).
+- `GET /error`: Returns HTTP 500 (`{ "error": "intentional failure for testing alerts" }`) to simulate failures.
+- `GET /metrics`: Exposes Prometheus metrics (Node.js runtime metrics + custom `http_requests_total` counter and `http_request_duration_seconds` histogram).
 
 ## Running the Application
 
@@ -53,6 +54,39 @@ Continuous Delivery is managed via GitOps using Argo CD running on a local Docke
 2. **CI Builds & Pushes**: GitHub Actions tests, builds, scans, and pushes the container image to GHCR.
 3. **Manifest Tag Update**: The `update-manifest` workflow job modifies the image tag in `k8s/deployment.yaml` with the commit SHA and pushes `chore: deploy <sha> [skip ci]` directly to `main`.
 4. **GitOps Sync**: Argo CD continuously monitors the repository, detects the updated manifest in Git, and automatically synchronizes (prunes and self-heals) the state into the `demo` namespace in the Docker Desktop Kubernetes cluster.
+
+## Monitoring
+
+The `monitoring/` directory provisions an in-cluster observability stack using Prometheus and Grafana:
+
+- **Prometheus**: Automatically discovers and scrapes `demo-api` pods using Kubernetes pod annotations (`prometheus.io/scrape`), evaluates alert rules, and stores metrics.
+- **Grafana**: Automatically provisions Prometheus as the default datasource and imports a pre-built "Demo API - Golden Signals" dashboard.
+
+### Alert Rules
+
+- `AppDown`: Fires if all `demo-api` pods are unreachable (`up{job="demo-api"} == 0`) for 1 minute.
+- `HighErrorRate`: Fires if 5xx responses exceed 5% of total requests over a 2-minute window.
+- `HighMemory`: Fires if resident memory of a `demo-api` pod exceeds 100MB for 2 minutes.
+- `SlowRequests`: Fires if 95th percentile request latency exceeds 500ms over a 2-minute window.
+
+### Accessing the Dashboards
+
+- **Prometheus UI**:
+  ```powershell
+  kubectl port-forward -n monitoring svc/prometheus 9090:9090
+  ```
+  Open `http://localhost:9090` in your browser.
+
+- **Grafana UI**:
+  ```powershell
+  kubectl port-forward -n monitoring svc/grafana 3001:80
+  ```
+  Open `http://localhost:3001` in your browser.
+  - **Username**: `admin`
+  - **Password**: `admin`
+
+> [!WARNING]
+> The Grafana credentials (`admin` / `admin`) are hardcoded for this local learning environment only. Production deployments should use Kubernetes Secrets or an external secret store.
 
 ## Future Phases
 

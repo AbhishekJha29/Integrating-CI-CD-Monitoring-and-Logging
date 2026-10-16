@@ -6,11 +6,12 @@ on:
   push:
     branches:
       - main
-    # Ignore changes to k8s manifests, Argo CD configs, and documentation on push.
-    # This stops the bot's manifest-updating commit from starting an endless CI loop.
+    # Ignore changes to k8s manifests, Argo CD configs, monitoring manifests, and documentation on push.
+    # This stops the bot's manifest-updating commit and monitoring changes from triggering unnecessary image builds.
     paths-ignore:
       - 'k8s/**'
       - 'argocd/**'
+      - 'monitoring/**'
       - '**.md'
 
 # Top-level permissions: read code and write container images to GHCR

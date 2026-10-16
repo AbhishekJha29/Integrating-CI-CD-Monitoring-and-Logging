@@ -1,0 +1,28 @@
+# Argo CD Application configuring GitOps continuous deployment for the monitoring stack
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: default
+  source:
+    # Target GitHub repository storing Prometheus and Grafana manifests
+    repoURL: https://github.com/AbhishekJha29/Integrating-CI-CD-Monitoring-and-Logging.git
+    targetRevision: main
+    path: monitoring
+  destination:
+    # Target cluster API endpoint and dedicated monitoring namespace
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      # prune: Automatically deletes resources in Kubernetes if they are removed from Git
+      prune: true
+      # selfHeal: Automatically reverts manual changes made directly in Kubernetes back to Git state
+      selfHeal: true
+    syncOptions:
+      # CreateNamespace: Automatically creates the destination namespace 'monitoring' if it does not exist
+      - CreateNamespace=true
+      # ServerSideApply: Enables Kubernetes server-side apply to manage large ConfigMaps (such as dashboards) cleanly
+      - ServerSideApply=true
